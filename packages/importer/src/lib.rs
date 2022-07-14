@@ -89,7 +89,7 @@ struct TransactionBuilder {
 }
 
 impl TransactionBuilder {
-    pub fn add_operation(&mut self, operation: Operation) -> &mut Self {
+    pub fn add_operation(mut self, operation: Operation) -> Self {
         let executed_at = operation.executed_at.clone();
 
         self.ledgers.insert(operation.ledger.clone());
@@ -116,7 +116,7 @@ impl TransactionBuilder {
         self
     }
 
-    pub fn build(self) -> Result<Transaction, ()> {
+    pub fn build(self) -> Result<Transaction, String> {
         let Self {
             operations,
             ledgers,
@@ -132,31 +132,45 @@ impl TransactionBuilder {
                 finished_at,
             })
         } else {
-            Err(())
+            Err("Missing dates".into())
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use chrono::DateTime;
+    use chrono::{DateTime, Utc};
+    use claim::assert_ok;
+    use fake::{faker, locales::EN, Fake};
     use rust_decimal_macros::dec;
 
     use crate::{
         Asset, AssetId, FiatCurrency, InflowOperation, Ledger, Operation, OperationId,
-        OperationKind, OutflowOperation, TransactionBuilder,
+        OperationKind, TransactionBuilder,
     };
 
-    #[test]
-    fn it_works() {
+    #[derive(Clone, Debug)]
+    struct DateTimeUtc(DateTime<Utc>);
+
+    impl quickcheck::Arbitrary for DateTimeUtc {
+        fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+
+            let datetime: DateTime<Utc> = faker::chrono::raw::DateTimeBefore(EN, Utc::now()).fake();
+
+            Self(datetime)
+        }
+        fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
+            quickcheck::empty_shrinker()
+        }
+    }
+
+    fn create_random_operation() -> Operation {
         let main_ledger = Ledger("OkLedger".into());
         let usd_asset = Asset {
             id: AssetId::Currency(FiatCurrency::USD),
         };
 
-        let mut txb = TransactionBuilder::default();
-
-        let op = Operation {
+        Operation {
             id: OperationId("OP1".into()),
             kind: OperationKind::Inflow(InflowOperation::Deposit),
             ledger: main_ledger.clone(),
@@ -165,25 +179,28 @@ mod tests {
             executed_at: DateTime::parse_from_rfc3339("1996-12-19T16:39:57-08:00")
                 .unwrap()
                 .into(),
-        };
-        txb.add_operation(op);
+        }
+    }
 
-        let op = Operation {
-            id: OperationId("OP2".into()),
-            kind: OperationKind::Outflow(OutflowOperation::Cost),
-            ledger: main_ledger.clone(),
-            asset: usd_asset.clone(),
-            value: dec!(49.99),
-            executed_at: DateTime::parse_from_rfc3339("1996-12-19T16:40:01-08:00")
-                .unwrap()
-                .into(),
-        };
-        txb.add_operation(op);
+    #[test]
+    fn transaction_is_created_from_a_single_operation() {
+        let tx = TransactionBuilder::default()
+            .add_operation(create_random_operation())
+            .build();
 
-        let tx = txb.build();
+        assert_ok!(tx);
+    }
 
-        assert!(tx.is_ok());
+    #[quickcheck_macros::quickcheck]
+    fn transaction_is_created_from_multiple_operations(dates: Vec<DateTimeUtc>) {
+        println!("{:?}", dates);
+        let tx = TransactionBuilder::default()
+            .add_operation(create_random_operation())
+            .add_operation(create_random_operation())
+            .add_operation(create_random_operation())
+            .add_operation(create_random_operation())
+            .build();
 
-        println!("{:?}", tx);
+        assert_ok!(tx);
     }
 }
