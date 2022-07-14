@@ -1,13 +1,16 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, fmt};
 
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 
 mod assets_trading;
 
+type AssetName = String;
+
 #[derive(Clone, Debug)]
 struct Asset {
     id: AssetId,
+    name: AssetName,
 }
 
 /// International Securities Identification Number
@@ -25,6 +28,12 @@ struct TokenId(TokenAddress);
 enum FiatCurrency {
     USD,
     EUR,
+}
+
+impl fmt::Display for FiatCurrency {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(self, f)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -141,24 +150,78 @@ impl TransactionBuilder {
 mod tests {
     use chrono::{DateTime, Utc};
     use claim::assert_ok;
-    use fake::{faker, locales::EN, Fake};
+    use fake::{faker::{self, company::{ en::{Buzzword, CompanyName, CompanySuffix, BsAdj, BsNoun}}, number::en::NumberWithFormat, chrono::raw::DateTimeBefore}, locales::EN, Fake, StringFaker};
+    use quickcheck::Arbitrary;
     use rust_decimal_macros::dec;
 
     use crate::{
         Asset, AssetId, FiatCurrency, InflowOperation, Ledger, Operation, OperationId,
-        OperationKind, TransactionBuilder,
+        OperationKind, TransactionBuilder, TokenId, ISIN,
     };
 
     #[derive(Clone, Debug)]
     struct DateTimeUtc(DateTime<Utc>);
 
     impl quickcheck::Arbitrary for DateTimeUtc {
-        fn arbitrary(g: &mut quickcheck::Gen) -> Self {
-
-            let datetime: DateTime<Utc> = faker::chrono::raw::DateTimeBefore(EN, Utc::now()).fake();
+        fn arbitrary(_g: &mut quickcheck::Gen) -> Self {
+            let datetime: DateTime<Utc> = DateTimeBefore(EN, Utc::now()).fake();
 
             Self(datetime)
         }
+        fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
+            quickcheck::empty_shrinker()
+        }
+    }
+
+    impl quickcheck::Arbitrary for Ledger {
+        fn arbitrary(_g: &mut quickcheck::Gen) -> Self {
+            Self(faker::company::en::CompanyName().fake())
+        }
+
+        fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
+            quickcheck::empty_shrinker()
+        }
+    }
+
+    impl quickcheck::Arbitrary for AssetId {
+        fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+            g.choose(&[
+                AssetId::Currency(FiatCurrency::EUR),
+                AssetId::Currency(FiatCurrency::USD),
+                AssetId::Token(TokenId(
+                    NumberWithFormat(&"0x####...####").fake()
+                )),
+                AssetId::Security(ISIN(
+                    NumberWithFormat(&"###-###-###").fake()
+                ))
+            ]).unwrap().to_owned()
+        }
+
+        fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
+            quickcheck::empty_shrinker()
+        }
+    }
+
+    impl quickcheck::Arbitrary for Asset {
+        fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+            let id: AssetId = Arbitrary::arbitrary(g);
+            let name: String = match &id {
+                AssetId::Security(_) => CompanyName().fake(),
+                AssetId::Token(_) => {
+                    let n1: String = BsAdj().fake();
+                    let n2: String = BsNoun().fake();
+
+                    format!("{} {} Chain", n1, n2)
+                },
+                AssetId::Currency(c) => c.to_string(),
+            };
+
+            Self {
+                id,
+                name,
+            }
+        }
+
         fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
             quickcheck::empty_shrinker()
         }
@@ -168,6 +231,7 @@ mod tests {
         let main_ledger = Ledger("OkLedger".into());
         let usd_asset = Asset {
             id: AssetId::Currency(FiatCurrency::USD),
+            name: "Asset Name".into(),
         };
 
         Operation {
@@ -192,7 +256,7 @@ mod tests {
     }
 
     #[quickcheck_macros::quickcheck]
-    fn transaction_is_created_from_multiple_operations(dates: Vec<DateTimeUtc>) {
+    fn transaction_is_created_from_multiple_operations(dates: Vec<Asset>) {
         println!("{:?}", dates);
         let tx = TransactionBuilder::default()
             .add_operation(create_random_operation())
