@@ -81,7 +81,7 @@ enum OutflowOperation {
     Donation,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct Transaction {
     operations: Vec<Operation>,
     ledgers: HashSet<Ledger>,
@@ -148,30 +148,22 @@ impl TransactionBuilder {
 
 #[cfg(test)]
 mod tests {
-    use chrono::{DateTime, Utc};
     use claim::assert_ok;
-    use fake::{faker::{self, company::{ en::{Buzzword, CompanyName, CompanySuffix, BsAdj, BsNoun}}, number::en::NumberWithFormat, chrono::raw::DateTimeBefore}, locales::EN, Fake, StringFaker};
+    use fake::{
+        faker::{
+            self,
+            company::en::{BsAdj, BsNoun, CompanyName},
+            number::en::NumberWithFormat,
+        },
+        Fake,
+    };
     use quickcheck::Arbitrary;
-    use rust_decimal_macros::dec;
+    use rust_decimal::{prelude::{FromPrimitive}, Decimal};
 
     use crate::{
         Asset, AssetId, FiatCurrency, InflowOperation, Ledger, Operation, OperationId,
-        OperationKind, TransactionBuilder, TokenId, ISIN,
+        OperationKind, OutflowOperation, TokenId, Transaction, TransactionBuilder, ISIN,
     };
-
-    #[derive(Clone, Debug)]
-    struct DateTimeUtc(DateTime<Utc>);
-
-    impl quickcheck::Arbitrary for DateTimeUtc {
-        fn arbitrary(_g: &mut quickcheck::Gen) -> Self {
-            let datetime: DateTime<Utc> = DateTimeBefore(EN, Utc::now()).fake();
-
-            Self(datetime)
-        }
-        fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
-            quickcheck::empty_shrinker()
-        }
-    }
 
     impl quickcheck::Arbitrary for Ledger {
         fn arbitrary(_g: &mut quickcheck::Gen) -> Self {
@@ -188,13 +180,11 @@ mod tests {
             g.choose(&[
                 AssetId::Currency(FiatCurrency::EUR),
                 AssetId::Currency(FiatCurrency::USD),
-                AssetId::Token(TokenId(
-                    NumberWithFormat(&"0x####...####").fake()
-                )),
-                AssetId::Security(ISIN(
-                    NumberWithFormat(&"###-###-###").fake()
-                ))
-            ]).unwrap().to_owned()
+                AssetId::Token(TokenId(NumberWithFormat(&"0x####...####").fake())),
+                AssetId::Security(ISIN(NumberWithFormat(&"###-###-###").fake())),
+            ])
+            .unwrap()
+            .to_owned()
         }
 
         fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
@@ -212,13 +202,60 @@ mod tests {
                     let n2: String = BsNoun().fake();
 
                     format!("{} {} Chain", n1, n2)
-                },
+                }
                 AssetId::Currency(c) => c.to_string(),
             };
 
-            Self {
-                id,
-                name,
+            Self { id, name }
+        }
+
+        fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
+            quickcheck::empty_shrinker()
+        }
+    }
+
+    impl quickcheck::Arbitrary for OperationId {
+        fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+            Self(faker::number::en::NumberWithFormat("OP####").fake())
+        }
+
+        fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
+            quickcheck::empty_shrinker()
+        }
+    }
+
+    impl quickcheck::Arbitrary for InflowOperation {
+        fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+            g.choose(&[Self::Deposit, Self::Dividend, Self::Income, Self::Reward])
+                .unwrap()
+                .to_owned()
+        }
+
+        fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
+            quickcheck::empty_shrinker()
+        }
+    }
+
+    impl quickcheck::Arbitrary for OutflowOperation {
+        fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+            g.choose(&[Self::Cost, Self::Donation, Self::Interest, Self::Withdrawal])
+                .unwrap()
+                .to_owned()
+        }
+
+        fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
+            quickcheck::empty_shrinker()
+        }
+    }
+
+    impl quickcheck::Arbitrary for OperationKind {
+        fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+            let seed: u8 = g.choose(&[0, 1]).unwrap().to_owned();
+
+            if seed == 0 {
+                Self::Inflow(Arbitrary::arbitrary(g))
+            } else {
+                Self::Outflow(Arbitrary::arbitrary(g))
             }
         }
 
@@ -227,42 +264,62 @@ mod tests {
         }
     }
 
-    fn create_random_operation() -> Operation {
-        let main_ledger = Ledger("OkLedger".into());
-        let usd_asset = Asset {
-            id: AssetId::Currency(FiatCurrency::USD),
-            name: "Asset Name".into(),
-        };
+    impl quickcheck::Arbitrary for Operation {
+        fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+            let asset: Asset = Arbitrary::arbitrary(g);
 
-        Operation {
-            id: OperationId("OP1".into()),
-            kind: OperationKind::Inflow(InflowOperation::Deposit),
-            ledger: main_ledger.clone(),
-            asset: usd_asset.clone(),
-            value: dec!(10_000),
-            executed_at: DateTime::parse_from_rfc3339("1996-12-19T16:39:57-08:00")
-                .unwrap()
-                .into(),
+            let value: Decimal = match &asset.id {
+                AssetId::Token(_) => {
+                    Decimal::new(1, 2)
+                }
+                _ => {
+                    Decimal::from_u128(Arbitrary::arbitrary(g)).unwrap_or_default()
+                },
+            };
+
+            Self {
+                id: Arbitrary::arbitrary(g),
+                kind: Arbitrary::arbitrary(g),
+                ledger: Arbitrary::arbitrary(g),
+                asset,
+                value,
+                executed_at: faker::chrono::en::DateTime().fake(),
+            }
+        }
+
+        fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
+            quickcheck::empty_shrinker()
         }
     }
 
-    #[test]
-    fn transaction_is_created_from_a_single_operation() {
+    impl quickcheck::Arbitrary for Transaction {
+        fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+            TransactionBuilder::default()
+                .add_operation(Arbitrary::arbitrary(g))
+                .add_operation(Arbitrary::arbitrary(g))
+                .build()
+                .unwrap()
+        }
+
+        fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
+            quickcheck::empty_shrinker()
+        }
+    }
+
+    #[quickcheck_macros::quickcheck]
+    fn transaction_is_created_from_a_single_operation(operation: Operation) {
         let tx = TransactionBuilder::default()
-            .add_operation(create_random_operation())
+            .add_operation(operation)
             .build();
 
         assert_ok!(tx);
     }
 
     #[quickcheck_macros::quickcheck]
-    fn transaction_is_created_from_multiple_operations(dates: Vec<Asset>) {
-        println!("{:?}", dates);
+    fn transaction_is_created_from_multiple_operations(op1: Operation, op2: Operation) {
         let tx = TransactionBuilder::default()
-            .add_operation(create_random_operation())
-            .add_operation(create_random_operation())
-            .add_operation(create_random_operation())
-            .add_operation(create_random_operation())
+            .add_operation(op1)
+            .add_operation(op2)
             .build();
 
         assert_ok!(tx);
