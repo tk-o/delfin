@@ -148,6 +148,9 @@ impl TransactionBuilder {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
+    use chrono::{Duration, Utc};
     use claim::assert_ok;
     use fake::{
         faker::{
@@ -158,7 +161,7 @@ mod tests {
         Fake,
     };
     use quickcheck::Arbitrary;
-    use rust_decimal::{prelude::{FromPrimitive}, Decimal};
+    use rust_decimal::Decimal;
 
     use crate::{
         Asset, AssetId, FiatCurrency, InflowOperation, Ledger, Operation, OperationId,
@@ -215,7 +218,7 @@ mod tests {
     }
 
     impl quickcheck::Arbitrary for OperationId {
-        fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+        fn arbitrary(_g: &mut quickcheck::Gen) -> Self {
             Self(faker::number::en::NumberWithFormat("OP####").fake())
         }
 
@@ -266,24 +269,25 @@ mod tests {
 
     impl quickcheck::Arbitrary for Operation {
         fn arbitrary(g: &mut quickcheck::Gen) -> Self {
-            let asset: Asset = Arbitrary::arbitrary(g);
+            let days_count = g.choose(&(0..1_000).collect::<Vec<_>>()).unwrap().to_owned();
 
-            let value: Decimal = match &asset.id {
-                AssetId::Token(_) => {
-                    Decimal::new(1, 2)
-                }
-                _ => {
-                    Decimal::from_u128(Arbitrary::arbitrary(g)).unwrap_or_default()
-                },
-            };
+            let int_part: u16 = g.choose(&(0..1_000).collect::<Vec<_>>()).unwrap().to_owned();
+            let decimal_part: u16 = g.choose(&(0..100).collect::<Vec<_>>()).unwrap().to_owned();
+
+            let value_str = format!("{}.{}", &int_part, &decimal_part);
+
+            let value: Decimal = Decimal::from_str(&value_str).unwrap_or_default();
 
             Self {
                 id: Arbitrary::arbitrary(g),
                 kind: Arbitrary::arbitrary(g),
                 ledger: Arbitrary::arbitrary(g),
-                asset,
+                asset: Arbitrary::arbitrary(g),
+                executed_at: faker::chrono::en::DateTimeBetween(
+                    Utc::now().checked_sub_signed(Duration::days(days_count)).unwrap(),
+                    Utc::now(),
+                ).fake(),
                 value,
-                executed_at: faker::chrono::en::DateTime().fake(),
             }
         }
 
@@ -308,6 +312,7 @@ mod tests {
 
     #[quickcheck_macros::quickcheck]
     fn transaction_is_created_from_a_single_operation(operation: Operation) {
+        println!("\n{:?}", &operation);
         let tx = TransactionBuilder::default()
             .add_operation(operation)
             .build();
