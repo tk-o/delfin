@@ -1,5 +1,6 @@
 mod asset;
 mod assets_trading;
+mod data_sources;
 mod ledger;
 mod operation;
 mod transaction;
