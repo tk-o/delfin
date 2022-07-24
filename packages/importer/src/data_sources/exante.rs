@@ -2,7 +2,16 @@ use std::{error::Error, fmt::Debug, fs, path::Path};
 
 use chrono::{DateTime, TimeZone, Utc};
 use csv::ReaderBuilder;
+use rust_decimal::{prelude::FromPrimitive, Decimal};
 use serde::{Deserialize, Deserializer};
+use slice_group_by::GroupBy;
+
+use crate::{
+    asset::{Asset, ISIN, AssetId, FiatCurrency},
+    ledger::Ledger,
+    operation::{InflowOperation, Operation, OperationId, OperationKind, OutflowOperation},
+    transaction::{Transaction, TransactionBuilder},
+};
 
 pub fn read_csv_file<TPath>(file_path: TPath) -> Result<Vec<Record>, Box<dyn Error>>
 where
@@ -20,6 +29,21 @@ where
         .collect();
 
     Ok(records)
+}
+
+pub fn group_records_into_transactions(records: &[Record]) -> Vec<Transaction> {
+    records
+        .linear_group_by(|a, b| a.when == b.when)
+        .filter_map(|group| {
+            let mut tx_builder = TransactionBuilder::default();
+
+            for record in group {
+                tx_builder = tx_builder.add_operation(record.into());
+            }
+
+            tx_builder.build().ok()
+        })
+        .collect::<Vec<_>>()
 }
 
 #[derive(Debug, Deserialize)]
@@ -53,6 +77,36 @@ pub struct Record {
     uuid: String,
 }
 
+impl<'a> Into<Operation> for &'a Record {
+    fn into(self) -> Operation {
+        // TODO: assign exact operation kind
+        let kind = if self.sum > 0.0 {
+            OperationKind::Inflow(InflowOperation::Deposit)
+        } else {
+            OperationKind::Outflow(OutflowOperation::Withdrawal)
+        };
+
+        let asset_id = if &self.isin != "None" {
+            AssetId::Security(ISIN(self.isin.to_owned()))
+        } else {
+            // TODO: map the currency
+            AssetId::Currency(FiatCurrency::USD)
+        };
+
+        Operation {
+            id: OperationId(self.uuid.to_owned()),
+            kind,
+            ledger: Ledger(self.account_id.to_owned()),
+            asset: Asset {
+                id: asset_id,
+                name: self.asset.to_owned(),
+            },
+            value: Decimal::from_f32(self.sum.abs()).unwrap_or_default(),
+            executed_at: self.when,
+        }
+    }
+}
+
 const EXANTE_DATE_FORMAT: &'static str = "%Y-%m-%d %H:%M:%S";
 
 // The signature of a deserialize_with function must follow the pattern:
@@ -73,20 +127,30 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
-
     use claim::{assert_gt, assert_ok};
 
     use super::*;
 
+    static DEMO_CSV_FILE_PATH: &str = "input/exante/demo.csv";
+
     #[test]
     fn load_file_contents() {
-        let operations = read_csv_file(Path::new("input/exante/demo.csv"));
+        let operations = read_csv_file(Path::new(DEMO_CSV_FILE_PATH));
 
         assert_ok!(&operations);
 
         let operations = operations.unwrap();
 
         assert_gt!(operations.len(), 0);
+    }
+
+    #[test]
+    fn group_records() {
+        let records =
+            read_csv_file(Path::new(DEMO_CSV_FILE_PATH)).expect("Could not load the CSV file");
+
+        let groupped_records = group_records_into_transactions(&records);
+
+        println!("{:#?}", groupped_records);
     }
 }
