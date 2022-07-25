@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 
-use crate::{ledger::Ledger, asset::Asset};
+use crate::{asset::Asset, ledger::Ledger};
 
 #[derive(Clone, Debug)]
 pub struct Operation {
@@ -100,10 +100,19 @@ pub(crate) mod test {
 
     impl quickcheck::Arbitrary for Operation {
         fn arbitrary(g: &mut quickcheck::Gen) -> Self {
-            let days_count = g.choose(&(0..1_000).collect::<Vec<_>>()).unwrap().to_owned();
+            let days_count = g
+                .choose(&(0 .. 1_000).collect::<Vec<_>>())
+                .unwrap()
+                .to_owned();
 
-            let int_part: u16 = g.choose(&(0..1_000).collect::<Vec<_>>()).unwrap().to_owned();
-            let decimal_part: u16 = g.choose(&(0..100).collect::<Vec<_>>()).unwrap().to_owned();
+            let int_part: u16 = g
+                .choose(&(0 .. 1_000).collect::<Vec<_>>())
+                .unwrap()
+                .to_owned();
+            let decimal_part: u16 = g
+                .choose(&(0 .. 100).collect::<Vec<_>>())
+                .unwrap()
+                .to_owned();
 
             let value_str = format!("{}.{}", &int_part, &decimal_part);
 
@@ -115,9 +124,12 @@ pub(crate) mod test {
                 ledger: Arbitrary::arbitrary(g),
                 asset: Arbitrary::arbitrary(g),
                 executed_at: faker::chrono::en::DateTimeBetween(
-                    Utc::now().checked_sub_signed(Duration::days(days_count)).unwrap(),
+                    Utc::now()
+                        .checked_sub_signed(Duration::days(days_count))
+                        .unwrap(),
                     Utc::now(),
-                ).fake(),
+                )
+                .fake(),
                 value,
             }
         }

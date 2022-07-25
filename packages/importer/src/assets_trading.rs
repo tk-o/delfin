@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 pub struct AssetBasicInfo {
@@ -44,7 +44,7 @@ trait AssetTrade {
 
 #[cfg(test)]
 mod tests {
-    use super::{Asset, AssetBasicInfo };
+    use super::{Asset, AssetBasicInfo};
 
     #[test]
     fn it_can_load_data_from_json() {

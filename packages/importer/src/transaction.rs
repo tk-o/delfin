@@ -2,8 +2,7 @@ use std::collections::HashSet;
 
 use chrono::{DateTime, Utc};
 
-use crate::{operation::Operation, ledger::Ledger};
-
+use crate::{ledger::Ledger, operation::Operation};
 
 #[derive(Clone, Debug)]
 pub struct Transaction {

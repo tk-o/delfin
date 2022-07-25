@@ -7,9 +7,11 @@ use serde::{Deserialize, Deserializer};
 use slice_group_by::GroupBy;
 
 use crate::{
-    asset::{Asset, ISIN, AssetId, FiatCurrency},
+    asset::{Asset, AssetId, FiatCurrency, ISIN},
     ledger::Ledger,
-    operation::{InflowOperation, Operation, OperationId, OperationKind, OutflowOperation},
+    operation::{
+        InflowOperation, Operation, OperationId, OperationKind, OutflowOperation,
+    },
     transaction::{Transaction, TransactionBuilder},
 };
 
@@ -146,8 +148,23 @@ mod tests {
 
     #[test]
     fn group_records() {
-        let records =
-            read_csv_file(Path::new(DEMO_CSV_FILE_PATH)).expect("Could not load the CSV file");
+        /**
+         * Think of using a state machine for the following transitions:
+         *
+         * Initial State
+         * \
+         *  - External Data (x) importer process -> Completed Import State
+         *
+         * Completed Import State
+         * \
+         *  - Internal Raw Data (x) aggregation process -> Completed Transform State
+         *
+         * Completed Transform State
+         * \
+         *  - Internal Aggregated Data (x) accounting process -> ?
+         */
+        let records = read_csv_file(Path::new(DEMO_CSV_FILE_PATH))
+            .expect("Could not load the CSV file");
 
         let groupped_records = group_records_into_transactions(&records);
 

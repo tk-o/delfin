@@ -22,7 +22,10 @@ mod tests {
     }
 
     #[quickcheck_macros::quickcheck]
-    fn transaction_is_created_from_multiple_operations(op1: operation::Operation, op2: operation::Operation) {
+    fn transaction_is_created_from_multiple_operations(
+        op1: operation::Operation,
+        op2: operation::Operation,
+    ) {
         let tx = TransactionBuilder::default()
             .add_operation(op1)
             .add_operation(op2)

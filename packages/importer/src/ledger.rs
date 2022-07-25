@@ -16,5 +16,4 @@ mod test {
             quickcheck::empty_shrinker()
         }
     }
-
 }

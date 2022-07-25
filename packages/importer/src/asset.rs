@@ -38,7 +38,13 @@ impl fmt::Display for FiatCurrency {
 
 #[cfg(test)]
 mod tests {
-    use fake::{faker::{number::en::NumberWithFormat, company::en::{CompanyName, BsAdj, BsNoun}}, Fake};
+    use fake::{
+        faker::{
+            company::en::{BsAdj, BsNoun, CompanyName},
+            number::en::NumberWithFormat,
+        },
+        Fake,
+    };
     use quickcheck::Arbitrary;
 
     use super::*;
