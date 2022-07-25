@@ -101,7 +101,8 @@ pub(crate) mod test {
     impl quickcheck::Arbitrary for Operation {
         fn arbitrary(g: &mut quickcheck::Gen) -> Self {
             let days_count = g
-                .choose(&(0 .. 1_000).collect::<Vec<_>>())
+                // having 0 opening the range causes issue with faker's date-between sample
+                .choose(&(1 .. 1_000).collect::<Vec<_>>())
                 .unwrap()
                 .to_owned();
 

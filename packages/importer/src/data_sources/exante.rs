@@ -40,7 +40,7 @@ pub fn group_records_into_transactions(records: &[Record]) -> Vec<Transaction> {
             let mut tx_builder = TransactionBuilder::default();
 
             for record in group {
-                tx_builder = tx_builder.add_operation(record.into());
+                tx_builder.add_operation(record.into());
             }
 
             tx_builder.build().ok()

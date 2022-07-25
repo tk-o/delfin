@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, ops::Deref};
 
 use chrono::{DateTime, Utc};
 
@@ -21,7 +21,7 @@ pub struct TransactionBuilder {
 }
 
 impl TransactionBuilder {
-    pub fn add_operation(mut self, operation: Operation) -> Self {
+    pub fn add_operation(&mut self, operation: Operation) -> &mut Self {
         let executed_at = operation.executed_at.to_owned();
 
         self.ledgers.insert(operation.ledger.to_owned());
@@ -48,7 +48,7 @@ impl TransactionBuilder {
         self
     }
 
-    pub fn build(self) -> Result<Transaction, String> {
+    pub fn build(&mut self) -> Result<Transaction, String> {
         let Self {
             operations,
             ledgers,
@@ -56,12 +56,16 @@ impl TransactionBuilder {
             finished_at,
         } = self;
 
+        if operations.is_empty() {
+            return Err("Missing operations".into());
+        }
+
         if let (Some(started_at), Some(finished_at)) = (started_at, finished_at) {
             Ok(Transaction {
-                operations,
-                ledgers,
-                started_at,
-                finished_at,
+                operations: self.operations.to_owned(),
+                ledgers: self.ledgers.to_owned(),
+                started_at: started_at.to_owned(),
+                finished_at: finished_at.to_owned(),
             })
         } else {
             Err("Missing dates".into())
@@ -71,21 +75,41 @@ impl TransactionBuilder {
 
 #[cfg(test)]
 mod tests {
-    use quickcheck::Arbitrary;
+    use claim::{assert_err, assert_ok};
 
     use super::*;
 
-    impl quickcheck::Arbitrary for Transaction {
-        fn arbitrary(g: &mut quickcheck::Gen) -> Self {
-            TransactionBuilder::default()
-                .add_operation(Arbitrary::arbitrary(g))
-                .add_operation(Arbitrary::arbitrary(g))
-                .build()
-                .unwrap()
+    #[test]
+    fn builder_returns_error_when_no_operations_provided() {
+        let tx = TransactionBuilder::default().build();
+
+        assert_err!(tx);
+    }
+
+    #[quickcheck_macros::quickcheck]
+    fn builder_returns_tx_when_one_operation_provided(operation: Operation) {
+        let tx = TransactionBuilder::default()
+            .add_operation(operation)
+            .build();
+
+        assert_ok!(tx);
+    }
+
+    #[quickcheck_macros::quickcheck]
+    fn builder_returns_tx_when_multiple_operations_provided(operations: Vec<Operation>) {
+        // sometimes there's no sample provided
+        if operations.is_empty() {
+            return ;
         }
 
-        fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
-            quickcheck::empty_shrinker()
+        let mut tx_builder = TransactionBuilder::default();
+
+        for operation in operations.into_iter().take(4) {
+            tx_builder.add_operation(operation);
         }
+
+        let tx = tx_builder.build();
+
+        assert_ok!(tx);
     }
 }
