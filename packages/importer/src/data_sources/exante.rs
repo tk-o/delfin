@@ -2,20 +2,21 @@ use std::{error::Error, fmt::Debug, fs, path::Path};
 
 use chrono::{DateTime, TimeZone, Utc};
 use csv::ReaderBuilder;
-use rust_decimal::{prelude::FromPrimitive, Decimal};
 use serde::{Deserialize, Deserializer};
 use slice_group_by::GroupBy;
+use thiserror::Error;
 
 use crate::{
-    asset::{Asset, AssetId, FiatCurrency, ISIN},
+    asset::{Asset, AssetId, FiatCurrency, ISINError, ISIN},
     ledger::Ledger,
     operation::{
-        InflowOperation, Operation, OperationId, OperationKind, OutflowOperation,
+        InflowOperation, Operation, OperationId, OperationIdError, OperationKind,
+        OutflowOperation,
     },
     transaction::{Transaction, TransactionBuilder},
 };
 
-pub fn read_csv_file<TPath>(file_path: TPath) -> Result<Vec<Record>, Box<dyn Error>>
+pub fn read_csv_file<TPath>(file_path: TPath) -> Result<Vec<RawRecord>, Box<dyn Error>>
 where
     TPath: AsRef<Path> + Debug,
 {
@@ -26,31 +27,33 @@ where
         .from_reader(data.as_bytes());
 
     let records = rdr
-        .deserialize::<Record>()
+        .deserialize::<RawRecord>()
         .filter_map(|record| record.ok())
         .collect();
 
     Ok(records)
 }
 
-pub fn group_records_into_transactions(records: &[Record]) -> Vec<Transaction> {
-    records
+pub fn group_records_into_transactions(
+    records: &[RawRecord],
+) -> Result<Vec<Transaction>, RawRecordError> {
+    Ok(records
         .linear_group_by(|a, b| a.when == b.when)
         .filter_map(|group| {
             let mut tx_builder = TransactionBuilder::default();
 
             for record in group {
-                tx_builder.add_operation(record.into());
+                tx_builder.add_operation(record.try_into().ok()?);
             }
 
             tx_builder.build().ok()
         })
-        .collect::<Vec<_>>()
+        .collect::<Vec<_>>())
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-pub struct Record {
+pub struct RawRecord {
     #[serde(rename = "Transaction ID")]
     tx_id: String,
 
@@ -79,8 +82,22 @@ pub struct Record {
     uuid: String,
 }
 
-impl<'a> Into<Operation> for &'a Record {
-    fn into(self) -> Operation {
+#[derive(Error, Debug)]
+pub enum RawRecordError {
+    #[error("{0}")]
+    OperationId(#[from] OperationIdError),
+
+    #[error("{0}")]
+    ISIN(#[from] ISINError),
+
+    #[error("Invalid record value")]
+    Value(#[from] rust_decimal::Error),
+}
+
+impl<'a> TryInto<Operation> for &'a RawRecord {
+    type Error = RawRecordError;
+
+    fn try_into(self) -> Result<Operation, Self::Error> {
         // TODO: assign exact operation kind
         let kind = if self.sum > 0.0 {
             OperationKind::Inflow(InflowOperation::Deposit)
@@ -89,23 +106,20 @@ impl<'a> Into<Operation> for &'a Record {
         };
 
         let asset_id = if &self.isin != "None" {
-            AssetId::Security(ISIN(self.isin.to_owned()))
+            AssetId::Security(self.isin.parse::<ISIN>()?)
         } else {
             // TODO: map the currency
             AssetId::Currency(FiatCurrency::USD)
         };
 
-        Operation {
-            id: OperationId(self.uuid.to_owned()),
+        Ok(Operation {
+            id: self.uuid.parse::<OperationId>()?,
             kind,
-            ledger: Ledger(self.account_id.to_owned()),
-            asset: Asset {
-                id: asset_id,
-                name: self.asset.to_owned(),
-            },
-            value: Decimal::from_f32(self.sum.abs()).unwrap_or_default(),
+            ledger: Ledger::new(self.account_id.to_owned()),
+            asset: Asset::new(asset_id, self.asset.to_owned()),
+            value: self.sum.abs().try_into()?,
             executed_at: self.when,
-        }
+        })
     }
 }
 

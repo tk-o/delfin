@@ -1,5 +1,11 @@
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Ledger(pub String);
+pub struct Ledger(String);
+
+impl Ledger {
+    pub fn new(name: String) -> Self {
+        Self(name)
+    }
+}
 
 #[cfg(test)]
 mod test {
@@ -9,7 +15,7 @@ mod test {
 
     impl quickcheck::Arbitrary for Ledger {
         fn arbitrary(_g: &mut quickcheck::Gen) -> Self {
-            Self(faker::company::en::CompanyName().fake())
+            Ledger::new(faker::company::en::CompanyName().fake())
         }
 
         fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {

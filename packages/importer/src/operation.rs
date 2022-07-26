@@ -1,5 +1,8 @@
+use std::str::FromStr;
+
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
+use thiserror::Error;
 
 use crate::{asset::Asset, ledger::Ledger};
 
@@ -14,7 +17,20 @@ pub struct Operation {
 }
 
 #[derive(Clone, Debug)]
-pub struct OperationId(pub String);
+pub struct OperationId(String);
+
+#[derive(Debug, Error)]
+pub enum OperationIdError {
+
+}
+
+impl FromStr for OperationId {
+    type Err = OperationIdError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(OperationId(s.into()))
+    }
+}
 
 #[derive(Clone, Debug)]
 pub enum OperationKind {

@@ -13,7 +13,6 @@ mod tests {
 
     #[quickcheck_macros::quickcheck]
     fn transaction_is_created_from_a_single_operation(operation: operation::Operation) {
-        println!("\n{:?}", &operation);
         let tx = TransactionBuilder::default()
             .add_operation(operation)
             .build();
