@@ -1,6 +1,6 @@
-# Finance On Rails
+# Delfin
 
-Solving for tracking and processing financial transactions of any kind with the aim of easy and accurate reporting for tax purposes.
+The Delfin software is aiming to solve for processing and tracking for financial transactions of any kind. It makes the reporting for tax purposes easy and accurate, especially in Australian tax jurisdiction.
 
 ## Problem
 
