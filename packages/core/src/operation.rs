@@ -9,15 +9,6 @@ use thiserror::Error;
 use crate::{asset::Asset, ledger::Ledger};
 
 /// Describes the smallest possible financial primitive.
-///
-/// # Example
-/// ```
-/// use finance_on_rails_importer::opeartion::Operation;
-///
-/// let ledger = Operation::new("TKO's trading account");
-/// ```
-///
-///use std::str::FromStr;
 #[derive(Clone, Debug)]
 pub struct Operation {
     pub id: OperationId,

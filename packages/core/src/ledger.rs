@@ -2,7 +2,7 @@
 ///
 /// # Example
 /// ```
-/// use finance_on_rails_importer::ledger::Ledger;
+/// use delfin::ledger::Ledger;
 ///
 /// let ledger = Ledger::new("TKO's trading account");
 /// ```

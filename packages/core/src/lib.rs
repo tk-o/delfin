@@ -1,11 +1,14 @@
+//! # Delfin
+//!
+//! `delfin` is a library of entities and processes to make processing certain
+//! financial transactions easy and accurate.
+
 pub mod asset;
 pub mod assets_trading;
 pub mod data_sources;
 pub mod ledger;
 pub mod operation;
 pub mod transaction;
-
-/// Importer module for Finance on Rails suite.
 
 #[cfg(test)]
 mod tests {

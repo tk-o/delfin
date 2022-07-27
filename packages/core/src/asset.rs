@@ -31,7 +31,7 @@ pub type AssetName = String;
 /// # Example
 /// ```
 /// use std::str::FromStr;
-/// use finance_on_rails_importer::asset::{ISIN, ISINError};
+/// use delfin::asset::{ISIN, ISINError};
 ///
 /// let isin = "NA-000K0VF05-4".parse::<ISIN>();
 /// assert!(isin.is_ok());
