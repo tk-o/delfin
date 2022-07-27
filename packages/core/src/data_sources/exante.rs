@@ -115,7 +115,7 @@ impl<'a> TryInto<Operation> for &'a RawRecord {
         Ok(Operation {
             id: self.uuid.parse::<OperationId>()?,
             kind,
-            ledger: Ledger::new(self.account_id.to_owned()),
+            ledger: Ledger::new(self.account_id.as_str()),
             asset: Asset::new(asset_id, self.asset.to_owned()),
             value: self.sum.abs().try_into()?,
             executed_at: self.when,

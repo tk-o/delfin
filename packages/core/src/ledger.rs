@@ -1,9 +1,19 @@
+/// Keeps information about a ledger which is a wrapper for transactions.
+///
+/// # Example
+/// ```
+/// use finance_on_rails_importer::ledger::Ledger;
+///
+/// let ledger = Ledger::new("TKO's trading account");
+/// ```
+///
+///
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Ledger(String);
 
 impl Ledger {
-    pub fn new(name: String) -> Self {
-        Self(name)
+    pub fn new(name: &str) -> Self {
+        Self(name.to_owned())
     }
 }
 
@@ -15,7 +25,7 @@ mod test {
 
     impl quickcheck::Arbitrary for Ledger {
         fn arbitrary(_g: &mut quickcheck::Gen) -> Self {
-            Ledger::new(faker::company::en::CompanyName().fake())
+            Ledger::new(&faker::company::en::CompanyName().fake::<String>())
         }
 
         fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {

@@ -1,9 +1,11 @@
-mod asset;
-mod assets_trading;
-mod data_sources;
-mod ledger;
-mod operation;
-mod transaction;
+pub mod asset;
+pub mod assets_trading;
+pub mod data_sources;
+pub mod ledger;
+pub mod operation;
+pub mod transaction;
+
+/// Importer module for Finance on Rails suite.
 
 #[cfg(test)]
 mod tests {

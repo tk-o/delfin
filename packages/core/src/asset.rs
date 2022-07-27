@@ -26,7 +26,19 @@ pub enum AssetId {
 pub type AssetName = String;
 
 /// International Securities Identification Number
-/// https://www.investopedia.com/terms/i/isin.asp
+/// <https://www.investopedia.com/terms/i/isin.asp>
+///
+/// # Example
+/// ```
+/// use std::str::FromStr;
+/// use finance_on_rails_importer::asset::{ISIN, ISINError};
+///
+/// let isin = "NA-000K0VF05-4".parse::<ISIN>();
+/// assert!(isin.is_ok());
+///
+/// let isin = "A-000K0VF05".parse::<ISIN>();
+/// assert!(matches!(isin.unwrap_err(), ISINError::InvalidISO6166));
+/// ```
 #[derive(Clone, Debug)]
 pub struct ISIN(String);
 
